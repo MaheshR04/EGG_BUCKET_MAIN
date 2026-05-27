@@ -1,0 +1,181 @@
+// src/App.jsx
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import LandingPage from "./pages/LandingPage";
+import SignIn from "./pages/SignIn";
+
+import AdminDashboard from "./pages/AdminDashboard";
+import DailyDamages from "./pages/DailyDamages";
+import Neccrate from "./pages/Neccrate";
+import Dailysales from "./pages/Dailysales";
+import Distributor from "./pages/Distributor";
+import CashPayments from "./pages/CashPayments";
+import DigitalPayments from "./pages/DigitalPayments";
+import Outlets from "./pages/Outlets";
+import Users from "./pages/Users";
+import IncentivePage from "./pages/IncentivePage";
+import AdvancePage from "./pages/AdvancePage";
+import FoodAllowancePage from "./pages/FoodAllowancePage";
+import RemarksPage from "./pages/RemarksPage";
+import DailyRevenue from "./pages/DailyRevenue";
+import Reports from "./pages/Reports";
+import { Navigate } from "react-router-dom";
+
+import DataAgentDashboard from "./pages/DataAgentDashboard";
+import SupervisorDashboard from "./pages/SupervisorDashboard";
+import { DamageProvider } from "./context/DamageContext";
+import { PanelProvider } from "./context/PanelContext";
+import AdminLayoutWithPanel from "./layouts/AdminLayoutWithPanel";
+import ViewerData from "./pages/ViewerData";
+import SupervisorLayout from "./layouts/SupervisorLayout";
+import DataEntry from "./pages/DataEntry";
+import ZoneStockEntry from "./pages/ZoneStockEntry";
+
+function ProtectedRoute({ element, requiredRole }) {
+  let user = null;
+  try {
+    user = JSON.parse(localStorage.getItem("user"));
+  } catch {}
+  const role = user?.role ? String(user.role).toLowerCase() : "";
+  const roles = Array.isArray(user?.roles) ? user.roles.map(r => String(r).toLowerCase()) : [];
+  const isAdmin = role === "admin" || roles.includes("admin");
+  const isViewer = role === "viewer" || roles.includes("viewer");
+  const isSupervisor = role === "supervisor" || roles.includes("supervisor");
+  const dataAgentRoles = roles.length ? roles : (role ? [role] : []);
+  if (
+    isAdmin ||
+    !requiredRole ||
+    dataAgentRoles.includes(String(requiredRole).toLowerCase()) ||
+    isViewer ||
+    (String(requiredRole).toLowerCase() === "supervisor" && isSupervisor)
+  ) {
+    return element;
+  }
+  // Not allowed: redirect to data agent dashboard
+  return <Navigate to="/dashboard" replace />;
+}
+
+function App() {
+  return (
+    <DamageProvider>
+      <PanelProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* PUBLIC */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/signin" element={<SignIn />} />
+
+            {/* ADMIN - All pages with panel layout support */}
+            <Route
+              path="/admin/dashboard"
+              element={<ProtectedRoute element={<AdminLayoutWithPanel><AdminDashboard /></AdminLayoutWithPanel>} requiredRole={null} />}
+            />
+            <Route
+              path="/admin/damages"
+              element={<ProtectedRoute element={<AdminLayoutWithPanel><DailyDamages /></AdminLayoutWithPanel>} requiredRole={null} />}
+            />
+            <Route
+              path="/admin/neccrate"
+              element={<ProtectedRoute element={<AdminLayoutWithPanel><Neccrate /></AdminLayoutWithPanel>} requiredRole="neccrate" />}
+            />
+
+            <Route
+              path="/admin/incentive"
+              element={<ProtectedRoute element={<AdminLayoutWithPanel><IncentivePage /></AdminLayoutWithPanel>} requiredRole="incentive" />}
+            />
+            <Route
+              path="/admin/advance"
+              element={<ProtectedRoute element={<AdminLayoutWithPanel><AdvancePage /></AdminLayoutWithPanel>} requiredRole="advance" />}
+            />
+            <Route
+              path="/admin/food-allowance"
+              element={<ProtectedRoute element={<AdminLayoutWithPanel><FoodAllowancePage /></AdminLayoutWithPanel>} requiredRole="food_allowance" />}
+            />
+            <Route
+              path="/admin/remarks"
+              element={<ProtectedRoute element={<AdminLayoutWithPanel><RemarksPage /></AdminLayoutWithPanel>} requiredRole={null} />}
+            />
+            <Route
+              path="/admin/daily-revenue"
+              element={<ProtectedRoute element={<AdminLayoutWithPanel><DailyRevenue /></AdminLayoutWithPanel>} requiredRole={null} />}
+            />
+            <Route
+              path="/admin/dailysales"
+              element={<ProtectedRoute element={<AdminLayoutWithPanel><Dailysales /></AdminLayoutWithPanel>} requiredRole="daily_sales" />}
+            />
+            <Route
+              path="/admin/distribution"
+              element={<ProtectedRoute element={<AdminLayoutWithPanel><Distributor /></AdminLayoutWithPanel>} requiredRole={null} />}
+            />
+            <Route
+              path="/admin/cash-payments"
+              element={<ProtectedRoute element={<AdminLayoutWithPanel><CashPayments /></AdminLayoutWithPanel>} requiredRole="cash_payments" />}
+            />
+            <Route
+              path="/admin/digital-payments"
+              element={<ProtectedRoute element={<AdminLayoutWithPanel><DigitalPayments /></AdminLayoutWithPanel>} requiredRole="digital_payments" />}
+            />
+            <Route
+              path="/admin/outlets"
+              element={<ProtectedRoute element={<AdminLayoutWithPanel><Outlets /></AdminLayoutWithPanel>} requiredRole="outlets" />}
+            />
+            <Route
+              path="/admin/users"
+              element={<ProtectedRoute element={<AdminLayoutWithPanel><Users /></AdminLayoutWithPanel>} requiredRole={null} />}
+            />
+            <Route
+              path="/admin/reports"
+              element={<ProtectedRoute element={<AdminLayoutWithPanel><Reports /></AdminLayoutWithPanel>} requiredRole={null} />}
+            />
+            <Route
+              path="/admin/data-entry"
+              element={<ProtectedRoute element={<AdminLayoutWithPanel><DataEntry /></AdminLayoutWithPanel>} requiredRole={null} />}
+            />
+            <Route
+              path="/admin/inventory"
+              element={<ProtectedRoute element={<AdminLayoutWithPanel><ZoneStockEntry /></AdminLayoutWithPanel>} requiredRole={null} />}
+            />
+
+            {/* SUPERVISOR ROUTES */}
+            <Route path="/supervisor/dashboard" element={<ProtectedRoute element={<SupervisorDashboard />} requiredRole="supervisor" />} />
+            <Route path="/supervisor/damages" element={<ProtectedRoute element={<SupervisorLayout><DailyDamages supervisor /></SupervisorLayout>} requiredRole="supervisor" />} />
+            <Route path="/supervisor/neccrate" element={<ProtectedRoute element={<SupervisorLayout><Neccrate supervisor /></SupervisorLayout>} requiredRole="supervisor" />} />
+            <Route path="/supervisor/dailysales" element={<ProtectedRoute element={<SupervisorLayout><Dailysales supervisor /></SupervisorLayout>} requiredRole="supervisor" />} />
+            <Route path="/supervisor/digital-payments" element={<ProtectedRoute element={<SupervisorLayout><DigitalPayments supervisor /></SupervisorLayout>} requiredRole="supervisor" />} />
+            <Route path="/supervisor/cash-payments" element={<ProtectedRoute element={<SupervisorLayout><CashPayments supervisor /></SupervisorLayout>} requiredRole="supervisor" />} />
+            <Route path="/supervisor/reports" element={<ProtectedRoute element={<SupervisorLayout><Reports supervisor /></SupervisorLayout>} requiredRole="supervisor" />} />
+            <Route path="/supervisor/data-entry" element={<ProtectedRoute element={<SupervisorLayout><DataEntry supervisor /></SupervisorLayout>} requiredRole="supervisor" />} />
+            <Route path="/supervisor/inventory" element={<ProtectedRoute element={<SupervisorLayout><ZoneStockEntry /></SupervisorLayout>} requiredRole="supervisor" />} />
+            <Route path="/supervisor/incentive" element={<ProtectedRoute element={<SupervisorLayout><IncentivePage supervisor /></SupervisorLayout>} requiredRole="supervisor" />} />
+            <Route path="/supervisor/advance" element={<ProtectedRoute element={<SupervisorLayout><AdvancePage supervisor /></SupervisorLayout>} requiredRole="supervisor" />} />
+            <Route path="/supervisor/food-allowance" element={<ProtectedRoute element={<SupervisorLayout><FoodAllowancePage supervisor /></SupervisorLayout>} requiredRole="supervisor" />} />
+            <Route path="/supervisor/remarks" element={<ProtectedRoute element={<SupervisorLayout><RemarksPage supervisor /></SupervisorLayout>} requiredRole="supervisor" />} />
+
+            {/* DATA AGENT ROUTES */}
+            <Route path="/dataagent/dashboard" element={<ProtectedRoute element={<DataAgentDashboard />} requiredRole="dataagent" />} />
+            <Route path="/dashboard" element={<DataAgentDashboard />} />
+            
+            {/* VIEWER ROUTES */}
+            <Route
+              path="/viewer/dashboard"
+              element={
+                <ProtectedRoute
+                  element={
+                    <AdminLayoutWithPanel>
+                      <AdminDashboard />
+                    </AdminLayoutWithPanel>
+                  }
+                  requiredRole={null}
+                />
+              }
+            />
+            <Route path="/viewer/data" element={<ViewerData/>}/>
+
+            
+          </Routes>
+        </BrowserRouter>
+      </PanelProvider>
+    </DamageProvider>
+  );
+}
+
+export default App;

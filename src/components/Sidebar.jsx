@@ -1,0 +1,337 @@
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import logo from "../assets/Logo.png";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faUserPlus } from "@fortawesome/free-solid-svg-icons";
+import { faMoneyBillWave } from "@fortawesome/free-solid-svg-icons";
+import { faGift } from "@fortawesome/free-solid-svg-icons";
+import { faSliders } from "@fortawesome/free-solid-svg-icons";
+import { faUtensils } from "@fortawesome/free-solid-svg-icons";
+import { faClipboard } from "@fortawesome/free-solid-svg-icons";
+import {
+  faTableCells,
+  faEgg,
+  faDollarSign,
+  faWallet,
+  faStore,
+  faChartLine,
+  faUsers,
+  faRightFromBracket,
+  faExclamationTriangle,
+  faPenToSquare,
+} from "@fortawesome/free-solid-svg-icons";
+
+export default function Sidebar({ supervisor }) {
+  // Get user from localStorage
+  let user = null;
+  try {
+    user = JSON.parse(localStorage.getItem("user"));
+  } catch {}
+  const isAdmin = user && (user.role === "Admin" || (Array.isArray(user.roles) && user.roles.includes("admin")));
+  const isViewer = user && (user.role === "Viewer" || (Array.isArray(user.roles) && user.roles.includes("viewer")));
+  const isSupervisor = user && (user.role === "Supervisor" || user.role === "supervisor");
+  const dataAgentRoles = Array.isArray(user?.roles) ? user.roles : (user?.role ? [user.role] : []);
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(true);
+
+  // Persist sidebar open state across navigation and reloads
+  useEffect(() => {
+    const saved = localStorage.getItem('sidebarOpen');
+    if (saved !== null) setOpen(saved === 'true');
+  }, []);
+  useEffect(() => {
+    localStorage.setItem('sidebarOpen', open);
+  }, [open]);
+
+  const linkClass = (path) =>
+    `flex items-center gap-3 px-4 py-2 rounded-lg font-medium transition ${
+      pathname.startsWith(path)
+        ? "bg-orange-500 text-white"
+        : "text-gray-700 hover:bg-orange-100"
+    } ${open ? "justify-start" : "justify-center"}`;
+
+  const handleSignOut = () => {
+    localStorage.clear();
+    navigate("/signin");
+  };
+
+  return (
+    <div
+      className={`h-screen sticky top-0 bg-orange-50 shadow-md p-4 transition-all duration-300 overflow-y-auto ${
+        open ? "w-64" : "w-20"
+      }`}
+    >
+
+      {/* Logo */}
+      <div className="mb-8 flex items-center gap-2 justify-center">
+        <div className={`inline-block bg-orange-50 rounded ${open ? 'p-2' : 'p-1'}`}>
+          <img src={logo} alt="Egg Bucket Logo" className={`h-10 sm:h-12 md:h-14 w-auto object-contain mix-blend-multiply opacity-95`} />
+        </div>
+      </div>
+
+      {/* Menu Toggle */}
+      <div
+        className={`flex items-center cursor-pointer mb-8 ${
+          open ? "justify-between" : "justify-center"
+        }`}
+        onClick={() => setOpen(!open)}
+      >
+        {open && <span className="font-semibold text-sm">MENU</span>}
+        <span className="text-lg">☰</span>
+      </div>
+
+      {/* Navigation */}
+      <nav className="space-y-2">
+        {isSupervisor && (
+          <>
+            <Link to="/supervisor/dashboard" className={linkClass("/supervisor/dashboard")}> 
+              <FontAwesomeIcon icon={faTableCells} />
+              {open && "Dashboard"}
+            </Link>
+            <Link to="/supervisor/data-entry" className={linkClass("/supervisor/data-entry")}> 
+              <FontAwesomeIcon icon={faPenToSquare} />
+              {open && "Data Entry"}
+            </Link>
+            <Link to="/supervisor/inventory" className={linkClass("/supervisor/inventory")}> 
+              <FontAwesomeIcon icon={faStore} />
+              {open && "Inventory"}
+            </Link>
+            <Link to="/supervisor/damages" className={linkClass("/supervisor/damages")}> 
+              <FontAwesomeIcon icon={faExclamationTriangle} />
+              {open && "Daily Damages"}
+            </Link>
+            <Link to="/supervisor/neccrate" className={linkClass("/supervisor/neccrate")}> 
+              <FontAwesomeIcon icon={faEgg} />
+              {open && "NECC Rate"}
+            </Link>
+            <Link to="/supervisor/incentive" className={linkClass("/supervisor/incentive")}> 
+              <FontAwesomeIcon icon={faGift} />
+              {open && "Incentive"}
+            </Link>
+            <Link to="/supervisor/advance" className={linkClass("/supervisor/advance")}> 
+              <FontAwesomeIcon icon={faSliders} />
+              {open && "Advance"}
+            </Link>
+            <Link to="/supervisor/food-allowance" className={linkClass("/supervisor/food-allowance")}> 
+              <FontAwesomeIcon icon={faUtensils} />
+              {open && "Food Allowance"}
+            </Link>
+            <Link to="/supervisor/remarks" className={linkClass("/supervisor/remarks")}> 
+              <FontAwesomeIcon icon={faClipboard} />
+              {open && "Remarks"}
+            </Link>
+            <Link to="/supervisor/dailysales" className={linkClass("/supervisor/dailysales")}> 
+              <FontAwesomeIcon icon={faEgg} />
+              {open && "Daily Sales Quantity"}
+            </Link>
+            <Link to="/supervisor/digital-payments" className={linkClass("/supervisor/digital-payments")}> 
+              <FontAwesomeIcon icon={faWallet} />
+              {open && "Digital Payments"}
+            </Link>
+            <Link to="/supervisor/cash-payments" className={linkClass("/supervisor/cash-payments")}> 
+              <FontAwesomeIcon icon={faMoneyBillWave} />
+              {open && "Cash Payments"}
+            </Link>
+            <Link to="/supervisor/reports" className={linkClass("/supervisor/reports")}> 
+              <FontAwesomeIcon icon={faChartLine} />
+              {open && "Reports"}
+            </Link>
+          </>
+        )}
+        {/* Admin: show all links. Data Agent: show only allowed links. Viewer: show only data pages. */}
+        {isAdmin && (
+          <>
+            <Link to="/admin/dashboard" className={linkClass("/admin/dashboard")}> 
+              <FontAwesomeIcon icon={faTableCells} />
+              {open && "Dashboard"}
+            </Link>
+            <Link to="/admin/data-entry" className={linkClass("/admin/data-entry")}> 
+              <FontAwesomeIcon icon={faPenToSquare} />
+              {open && "Data Entry"}
+            </Link>
+            <Link to="/admin/inventory" className={linkClass("/admin/inventory")}> 
+              <FontAwesomeIcon icon={faStore} />
+              {open && "Inventory"}
+            </Link>
+            <Link to="/admin/damages" className={linkClass("/admin/damages")}> 
+              <FontAwesomeIcon icon={faExclamationTriangle} />
+              {open && "Daily Damages"}
+            </Link>
+            <Link to="/admin/neccrate" className={linkClass("/admin/neccrate")}> 
+              <FontAwesomeIcon icon={faEgg} />
+              {open && "NECC Rate"}
+            </Link>
+            <Link to="/admin/incentive" className={linkClass("/admin/incentive")}> 
+              <FontAwesomeIcon icon={faGift} />
+              {open && "Incentive"}
+            </Link>
+            <Link to="/admin/advance" className={linkClass("/admin/advance")}> 
+              <FontAwesomeIcon icon={faSliders} />
+              {open && "Advance"}
+            </Link>
+            <Link to="/admin/food-allowance" className={linkClass("/admin/food-allowance")}> 
+              <FontAwesomeIcon icon={faUtensils} />
+              {open && "Food Allowance"}
+            </Link>
+            <Link to="/admin/remarks" className={linkClass("/admin/remarks")}> 
+              <FontAwesomeIcon icon={faClipboard} />
+              {open && "Remarks"}
+            </Link>
+            <Link to="/admin/dailysales" className={linkClass("/admin/dailysales")}> 
+              <FontAwesomeIcon icon={faEgg} />
+              {open && "Daily Sales Quantity"}
+            </Link>
+            <Link to="/admin/digital-payments" className={linkClass("/admin/digital-payments")}> 
+              <FontAwesomeIcon icon={faWallet} />
+              {open && "Digital Payments"}
+            </Link>
+            <Link to="/admin/cash-payments" className={linkClass("/admin/cash-payments")}> 
+              <FontAwesomeIcon icon={faMoneyBillWave} />
+              {open && "Cash Payments"}
+            </Link>
+            <Link to="/admin/daily-revenue" className={linkClass("/admin/daily-revenue")}> 
+              <FontAwesomeIcon icon={faDollarSign} />
+              {open && "Daily Revenue"}
+            </Link>
+            <Link to="/admin/distribution" className={linkClass("/admin/distribution")}> 
+              <FontAwesomeIcon icon={faUsers} />
+              {open && "Add Supervisor"}
+            </Link>
+            <Link to="/admin/outlets" className={linkClass("/admin/outlets")}> 
+              <FontAwesomeIcon icon={faStore} />
+              {open && "Outlets"}
+            </Link>
+            <Link to="/admin/users" className={linkClass("/admin/users")}> 
+              <FontAwesomeIcon icon={faUsers} />
+              {open && "Supervisors Display"}
+            </Link>
+          </>
+        )}
+        {isViewer && (
+          <>
+            <Link to="/viewer/dashboard" className={linkClass("/viewer/dashboard")}>
+              <FontAwesomeIcon icon={faTableCells} />
+              {open && "Dashboard"}
+            </Link>
+            <Link to="/admin/inventory" className={linkClass("/admin/inventory")}> 
+              <FontAwesomeIcon icon={faStore} />
+              {open && "Inventory"}
+            </Link>
+            <Link to="/admin/damages" className={linkClass("/admin/damages")}> 
+              <FontAwesomeIcon icon={faExclamationTriangle} />
+              {open && "Daily Damages"}
+            </Link>
+            <Link to="/admin/neccrate" className={linkClass("/admin/neccrate")}> 
+              <FontAwesomeIcon icon={faEgg} />
+              {open && "NECC Rate"}
+            </Link>
+            <Link to="/admin/dailysales" className={linkClass("/admin/dailysales")}> 
+              <FontAwesomeIcon icon={faEgg} />
+              {open && "Daily Sales Quantity"}
+            </Link>
+            <Link to="/admin/digital-payments" className={linkClass("/admin/digital-payments")}> 
+              <FontAwesomeIcon icon={faWallet} />
+              {open && "Digital Payments"}
+            </Link>
+            <Link to="/admin/cash-payments" className={linkClass("/admin/cash-payments")}> 
+              <FontAwesomeIcon icon={faMoneyBillWave} />
+              {open && "Cash Payments"}
+            </Link>
+            <Link to="/admin/daily-revenue" className={linkClass("/admin/daily-revenue")}>
+              <FontAwesomeIcon icon={faDollarSign} />
+              {open && "Daily Revenue"}
+            </Link>
+              <Link to="/admin/reports" className={linkClass("/admin/reports")}> 
+            <FontAwesomeIcon icon={faChartLine} />
+            {open && "Reports"}
+          </Link>
+          </>
+        )}
+        {dataAgentRoles && dataAgentRoles.includes("distribution") && !isAdmin && (
+          <Link to="/admin/distribution" className={linkClass("/admin/distribution")}> 
+            <FontAwesomeIcon icon={faUserPlus} />
+            {open && "Add Supervisor"}
+          </Link>
+        )}
+        {dataAgentRoles && dataAgentRoles.includes("outlets") && !isAdmin && (
+          <Link to="/admin/outlets" className={linkClass("/admin/outlets")}> 
+            <FontAwesomeIcon icon={faStore} />
+            {open && "Outlets"}
+          </Link>
+        )}
+        {isAdmin && (
+          <Link to="/admin/reports" className={linkClass("/admin/reports")}> 
+            <FontAwesomeIcon icon={faChartLine} />
+            {open && "Reports"}
+          </Link>
+        )}
+        {/* Removed duplicate Users link for admin */}
+        {!isAdmin && !isViewer && (
+          <>
+            {(dataAgentRoles.includes("dashboard")) && (
+              <Link to="/admin/dashboard" className={linkClass("/admin/dashboard")}> 
+                <FontAwesomeIcon icon={faTableCells} />
+                {open && "Dashboard"}
+              </Link>
+            )}
+            {(dataAgentRoles.includes("daily_damages")) && (
+              <Link to="/admin/damages" className={linkClass("/admin/damages")}> 
+                <FontAwesomeIcon icon={faExclamationTriangle} />
+                {open && "Daily Damages"}
+              </Link>
+            )}
+            {(dataAgentRoles.includes("neccrate")) && (
+              <Link to="/admin/neccrate" className={linkClass("/admin/neccrate")}> 
+                <FontAwesomeIcon icon={faEgg} />
+                {open && "NECC Rate"}
+              </Link>
+            )}
+            {(dataAgentRoles.includes("daily_sales")) && (
+              <Link to="/admin/dailysales" className={linkClass("/admin/dailysales")}> 
+                <FontAwesomeIcon icon={faEgg} />
+                {open && "Daily Sales Quantity"}
+              </Link>
+            )}
+            {(dataAgentRoles.includes("advance")) && (
+              <Link to="/admin/advance" className={linkClass("/admin/advance")}> 
+                <FontAwesomeIcon icon={faSliders} />
+                {open && "Advance"}
+              </Link>
+            )}
+            {(dataAgentRoles.includes("digital_payments")) && (
+              <Link to="/admin/digital-payments" className={linkClass("/admin/digital-payments")}> 
+                <FontAwesomeIcon icon={faWallet} />
+                {open && "Digital Payments"}
+              </Link>
+            )}
+            {(dataAgentRoles.includes("cash_payments")) && (
+              <Link to="/admin/cash-payments" className={linkClass("/admin/cash-payments")}> 
+                <FontAwesomeIcon icon={faMoneyBillWave} />
+                {open && "Cash Payments"}
+              </Link>
+            )}
+            {(dataAgentRoles.includes("distribution")) && (
+              <Link to="/admin/distribution" className={linkClass("/admin/distribution")}> 
+                <FontAwesomeIcon icon={faUsers} />
+                {open && "Add Supervisor"}
+              </Link>
+            )}
+            {/* Removed duplicate Outlets link for data agents */}
+          </>
+        )}
+      </nav>
+
+      {/* Sign Out */}
+      <div className="mt-auto pt-6">
+        <button
+          onClick={handleSignOut}
+          className="flex items-center gap-3 px-4 py-2 text-gray-600 hover:text-red-600"
+        >
+          <FontAwesomeIcon icon={faRightFromBracket} />
+          {open && "Sign Out"}
+        </button>
+      </div>
+    </div>
+  );
+}

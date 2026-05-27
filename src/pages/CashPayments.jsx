@@ -1,0 +1,600 @@
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { getRoleFlags, zonesMatch } from "../utils/role";
+import { getThisWeekRange } from "../utils/dateRange";
+import * as XLSX from "xlsx";
+import DailyTable from "../components/DailyTable";
+
+const API_URL = import.meta.env.VITE_API_URL;
+const STORAGE_KEY = "egg_outlets_v1";
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+// Memoized utility functions
+const formatCurrencyNoDecimals = (value) => {
+  if (value == null || isNaN(value)) return "₹0";
+  return "₹" + Number(value).toLocaleString("en-IN", {
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+  });
+};
+
+const formatDateDMY = (iso) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear();
+  return `${day}-${month}-${year}`;
+};
+
+const formatDisplayDate = (iso) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+};
+
+/* ----------------- Icons ----------------- */
+const CalendarIcon = ({ className = "" }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+    <circle cx="8.5" cy="14.5" r="1" />
+    <circle cx="12" cy="14.5" r="1" />
+    <circle cx="15.5" cy="14.5" r="1" />
+    <circle cx="8.5" cy="18" r="1" />
+    <circle cx="12" cy="18" r="1" />
+    <circle cx="15.5" cy="18" r="1" />
+  </svg>
+);
+
+/* ------------- Custom Calendar Component --------- */
+const CashCalendar = ({ rows, selectedDate, onSelectDate, showDots = true }) => {
+  const today = new Date();
+  const initialDate = selectedDate ? new Date(selectedDate) : today;
+
+  const [viewMonth, setViewMonth] = useState(initialDate.getMonth());
+  const [viewYear, setViewYear] = useState(initialDate.getFullYear());
+
+  useEffect(() => {
+    if (!selectedDate) return;
+    const d = new Date(selectedDate);
+    if (!Number.isNaN(d.getTime())) {
+      setViewMonth(d.getMonth());
+      setViewYear(d.getFullYear());
+    }
+  }, [selectedDate]);
+
+  const hasEntryForDate = useCallback((iso) => 
+    rows.some((row) => row.date === iso),
+    [rows]
+  );
+
+  const { weeks } = useMemo(() => {
+    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+    
+    const weeks = [];
+    let day = 1 - firstDay;
+
+    for (let w = 0; w < 6; w++) {
+      const week = [];
+      for (let i = 0; i < 7; i++, day++) {
+        week.push(day < 1 || day > daysInMonth ? null : day);
+      }
+      weeks.push(week);
+    }
+
+    return { weeks };
+  }, [viewYear, viewMonth]);
+
+  const buildIso = useCallback((year, month, day) =>
+    `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+    []
+  );
+
+  const goPrevMonth = useCallback(() => {
+    setViewMonth((m) => {
+      if (m === 0) {
+        setViewYear((y) => y - 1);
+        return 11;
+      }
+      return m - 1;
+    });
+  }, []);
+
+  const goNextMonth = useCallback(() => {
+    setViewMonth((m) => {
+      if (m === 11) {
+        setViewYear((y) => y + 1);
+        return 0;
+      }
+      return m + 1;
+    });
+  }, []);
+
+  const yearOptions = useMemo(() => {
+    const options = [];
+    for (let y = viewYear - 3; y <= viewYear + 3; y++) {
+      options.push(y);
+    }
+    return options;
+  }, [viewYear]);
+
+  const selectedIso = selectedDate || "";
+
+  return (
+    <div className="w-72 rounded-2xl border border-gray-100 bg-white shadow-xl">
+      <div className="flex items-center justify-between px-4 pt-3 pb-2">
+        <button type="button" onClick={goPrevMonth} className="flex h-7 w-7 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100">‹</button>
+        <div className="flex items-center gap-2">
+          <select className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 leading-none focus:outline-none focus:ring-1 focus:ring-orange-400" value={viewMonth} onChange={(e) => setViewMonth(Number(e.target.value))}>
+            {MONTHS.map((m, idx) => <option key={m} value={idx}>{m.slice(0, 3)}</option>)}
+          </select>
+          <select className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 leading-none focus:outline-none focus:ring-1 focus:ring-orange-400" value={viewYear} onChange={(e) => setViewYear(Number(e.target.value))}>
+            {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+        <button type="button" onClick={goNextMonth} className="flex h-7 w-7 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100">›</button>
+      </div>
+
+      <div className="mt-1 grid grid-cols-7 gap-y-1 px-4 text-center text-[11px] font-medium text-gray-400">
+        <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+      </div>
+
+      <div className="mt-1 grid grid-cols-7 gap-y-1 px-3 pb-3 text-center text-xs">
+        {weeks.map((week, wIdx) =>
+          week.map((d, idx) => {
+            if (!d) return <div key={`${wIdx}-${idx}`} />;
+            const iso = buildIso(viewYear, viewMonth, d);
+            const hasEntry = showDots && hasEntryForDate(iso);
+            const isSelected = selectedIso === iso;
+            const isToday = today.getFullYear() === viewYear && today.getMonth() === viewMonth && today.getDate() === d;
+
+            return (
+              <button key={`${wIdx}-${idx}`} type="button" onClick={() => onSelectDate(iso)} className={showDots ? "flex flex-col items-center gap-1" : "flex h-8 items-center justify-center"}>
+                <div className={`flex h-7 w-7 items-center justify-center rounded-full ${isSelected ? "bg-green-500 text-white" : isToday ? "border border-green-500 text-green-600" : "text-gray-700 hover:bg-gray-100"}`}>{d}</div>
+                {showDots && <div className={`h-1.5 w-1.5 rounded-full ${hasEntry ? "bg-green-500" : "bg-red-400"}`} />}
+              </button>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default function CashPayments() {
+  const { isAdmin, isViewer, isDataAgent, isSupervisor, zone } = getRoleFlags();
+  const defaultWeekRange = useMemo(() => getThisWeekRange(), []);
+  // Supervisors can view but should not enter data here
+  const showForms = isAdmin || isDataAgent;
+
+  // Refs
+  const calendarRef = useRef(null);
+  const customFromRef = useRef(null);
+  const customToRef = useRef(null);
+
+  // State
+  const [outlets, setOutlets] = useState([]);
+  const [rows, setRows] = useState([]);
+
+  // Debug logs for troubleshooting
+  useEffect(() => {
+    console.log("CashPayments: outlets loaded", outlets.length, outlets);
+  }, [outlets]);
+
+  useEffect(() => {
+    console.log("CashPayments: rows loaded", rows.length, rows);
+  }, [rows]);
+
+  // formOutlets: zone-filtered for data entry (viewers see all)
+  const formOutlets = useMemo(() => {
+    if (isViewer) return outlets;
+    if (zone && Array.isArray(outlets)) {
+      return outlets.filter(o => typeof o === 'object' && zonesMatch(o.zoneId, zone));
+    }
+    return outlets;
+  }, [outlets, zone, isViewer]);
+  const displayedOutlets = (isSupervisor ? formOutlets : outlets).map(o => typeof o === 'string' ? o : o.id);
+  const [rangeType, setRangeType] = useState("thisWeek");
+  const [customFrom, setCustomFrom] = useState(defaultWeekRange.from);
+  const [customTo, setCustomTo] = useState(defaultWeekRange.to);
+  const [entryDate, setEntryDate] = useState("");
+  const [entryValues, setEntryValues] = useState({});
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isCustomFromOpen, setIsCustomFromOpen] = useState(false);
+  const [isCustomToOpen, setIsCustomToOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Click outside handlers
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (calendarRef.current && !calendarRef.current.contains(event.target)) setIsCalendarOpen(false);
+      if (customFromRef.current && !customFromRef.current.contains(event.target)) setIsCustomFromOpen(false);
+      if (customToRef.current && !customToRef.current.contains(event.target)) setIsCustomToOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Fetch outlets from backend for consistent naming (zone-specific for any user with zone)
+  const loadOutlets = useCallback(async () => {
+    try {
+      // Always load all outlets for display
+      const url = `${API_URL}/outlets/all`;
+      console.log('CashPayments loadOutlets URL:', url);
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setOutlets(data);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        } else {
+          setOutlets([]);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching outlets:", err);
+      // Fallback to localStorage if fetch fails
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setOutlets(parsed);
+          }
+        } catch (parseErr) {
+          console.error("Error parsing saved outlets:", parseErr);
+          setOutlets([]);
+        }
+      } else {
+        setOutlets([]);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    loadOutlets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Listen for outlet updates from other pages
+  useEffect(() => {
+    const handleOutletsUpdated = (event) => {
+      if (event.detail && Array.isArray(event.detail)) {
+        // Immediately update outlets from the event
+        setOutlets(event.detail);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(event.detail));
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadOutlets();
+      }
+    };
+
+    // Also listen for storage events from other tabs
+    const handleStorageChange = (e) => {
+      if (e.key === STORAGE_KEY && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setOutlets(parsed);
+          }
+        } catch (err) {
+          console.error("Error parsing storage event:", err);
+        }
+      }
+    };
+
+    window.addEventListener('egg:outlets-updated', handleOutletsUpdated);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('egg:outlets-updated', handleOutletsUpdated);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [loadOutlets]);
+
+  // Fetch payments
+  // Fetch payments (exposed for manual refresh)
+  const fetchPayments = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/cash-payments/all`);
+      const data = await res.json();
+      setRows(Array.isArray(data) ? data.map(d => ({ id: d.id || d._id, ...d })) : []);
+    } catch (err) {
+      console.error("Error fetching payments:", err);
+      setRows([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPayments();
+  }, [fetchPayments]);
+
+  // Check if entry exists for user's outlets (formOutlets)
+  const hasEntry = useMemo(() => {
+    if (!entryDate) return false;
+    const existing = rows.find((r) => r.date === entryDate);
+    if (!existing) return false;
+    // Check if any of user's outlets have data > 0
+    return formOutlets.some((outlet) => {
+      const area = outlet.area || outlet;
+      return Number(existing.outlets?.[area] || 0) > 0;
+    });
+  }, [entryDate, rows, formOutlets]);
+
+  const entryTotal = useMemo(() => {
+    if (!entryDate) return 0;
+    const existing = rows.find((r) => r.date === entryDate);
+    return existing?.totalAmount || Object.values(entryValues || {}).reduce((sum, v) => sum + (Number(v) || 0), 0);
+  }, [entryDate, rows, entryValues]);
+
+  // Load entry values when date changes (only for user's outlets)
+  useEffect(() => {
+    if (!entryDate) {
+      const reset = {};
+      formOutlets.forEach((o) => { reset[o.area || o] = ""; });
+      setEntryValues(reset);
+      return;
+    }
+
+    const existing = rows.find((r) => r.date === entryDate);
+    if (existing) {
+      // Load only user's outlet values
+      const vals = {};
+      formOutlets.forEach((o) => {
+        const area = o.area || o;
+        vals[area] = existing.outlets?.[area] ?? "";
+      });
+      setEntryValues(vals);
+    } else {
+      const reset = {};
+      formOutlets.forEach((o) => { reset[o.area || o] = ""; });
+      setEntryValues(reset);
+    }
+  }, [entryDate, rows, formOutlets]);
+
+  // Filtered rows with memoization
+  const filteredRows = useMemo(() => {
+    const now = new Date();
+    let from = null;
+    let to = null;
+
+
+    // Helper to format date as YYYY-MM-DD in local time
+    const toLocalIso = (d) => {
+      if (!d) return null;
+      if (typeof d === 'string' && d.match(/^\d{4}-\d{2}-\d{2}$/)) return d;
+      const dateObj = new Date(d);
+      if (Number.isNaN(dateObj.getTime())) return null;
+      // Use local time, not UTC
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    if (rangeType === "thisMonth") {
+      const first = new Date(now.getFullYear(), now.getMonth(), 1);
+      from = toLocalIso(first);
+      to = toLocalIso(now);
+    } else if (rangeType === "lastMonth") {
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      from = toLocalIso(lastMonth);
+      to = toLocalIso(new Date(lastMonth.getFullYear(), lastMonth.getMonth() + 1, 0));
+    } else if (rangeType === "thisWeek") {
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay());
+      from = toLocalIso(startOfWeek);
+      to = toLocalIso(now);
+    } else if (rangeType === "lastWeek") {
+      const endOfLastWeek = new Date(now);
+      endOfLastWeek.setDate(now.getDate() - now.getDay() - 1);
+      const startOfLastWeek = new Date(endOfLastWeek);
+      startOfLastWeek.setDate(endOfLastWeek.getDate() - 6);
+      from = toLocalIso(startOfLastWeek);
+      to = toLocalIso(endOfLastWeek);
+    } else if (rangeType === "custom" && customFrom && customTo) {
+      from = toLocalIso(customFrom);
+      to = toLocalIso(customTo);
+    }
+
+    const filtered = (!from || !to) ? rows : rows.filter((row) => {
+      const d = toLocalIso(row.date);
+      return d && d >= from && d <= to;
+    });
+
+    return filtered.sort((a, b) => {
+      const da = toLocalIso(a.date);
+      const db = toLocalIso(b.date);
+      return da < db ? -1 : da > db ? 1 : 0;
+    });
+  }, [rows, rangeType, customFrom, customTo]);
+
+  // Totals with memoization
+  const totals = useMemo(() => {
+    const outletTotals = {};
+    if (Array.isArray(outlets) && outlets.length > 0) {
+      outlets.forEach((outletObj) => {
+        const area = outletObj.area || outletObj;
+        outletTotals[area] = filteredRows.reduce((sum, row) => 
+          sum + (row.outlets[area] || 0), 0
+        );
+      });
+    }
+
+    const grandTotal = filteredRows.reduce((sum, row) => 
+      sum + (row.totalAmount || 0), 0
+    );
+
+    return { outletTotals, grandTotal };
+  }, [filteredRows, outlets]);
+
+  // Handlers with useCallback
+  const handleEntryChange = useCallback((outlet, value) => {
+    setEntryValues((prev) => ({ ...prev, [outlet]: value }));
+  }, []);
+
+  const handleSaveEntry = useCallback(async (e) => {
+    e.preventDefault();
+    
+    // Prevent double submission
+    if (isSaving) return;
+    
+    // Check if user's outlets already have data (hasEntry already does this check)
+    if (!entryDate || hasEntry) {
+      if (hasEntry) alert("You have already entered data for your outlets on this date");
+      return;
+    }
+
+    // Only save data for user's outlets (formOutlets)
+    const outletAmounts = {};
+    formOutlets.forEach((o) => {
+      const area = o.area || o;
+      outletAmounts[area] = Number(entryValues[area]) || 0;
+    });
+
+    let user = null;
+    try { user = JSON.parse(localStorage.getItem("user")); } catch {}
+    const addedBy = user ? {
+      username: user.username || user.uid || "Unknown",
+      zone: user.zoneId || user.zone || "No Zone",
+      role: user.role || "unknown",
+      timestamp: new Date().toISOString(),
+    } : null;
+
+    setIsSaving(true);
+    try {
+      const response = await fetch(`${API_URL}/cash-payments/add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: entryDate, outlets: outletAmounts, addedBy }),
+      });
+
+      if (!response.ok) {
+        console.error('Failed to add payment');
+        alert('Failed to add payment');
+        return;
+      }
+
+      const res = await fetch(`${API_URL}/cash-payments/all`);
+      const data = await res.json();
+      setRows(Array.isArray(data) ? data.map(d => ({ id: d.id || d._id, ...d })) : []);
+
+      // Show saved message and lock the form (like DailyDamages)
+      alert(`Saved entry for ${entryDate}`);
+    } catch (err) {
+      console.error('Error adding payment:', err);
+      alert('Error adding payment');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [entryDate, entryValues, formOutlets, hasEntry, isSaving]);
+
+  const downloadExcel = useCallback(() => {
+    if (!filteredRows || filteredRows.length === 0) {
+      alert("No data available");
+      return;
+    }
+
+    const data = filteredRows.map((row) => {
+      const obj = { Date: formatDateDMY(row.date) };
+      if (Array.isArray(outlets) && outlets.length > 0) {
+        outlets.forEach((outletObj) => {
+          const area = outletObj.area || outletObj;
+          obj[area] = Number(row.outlets?.[area] ?? 0);
+        });
+      }
+      obj.Total = Number(row.totalAmount ?? (Array.isArray(outlets) ? outlets.reduce((s, o) => s + Number(row.outlets?.[(o.area || o)] || 0), 0) : 0));
+      return obj;
+    });
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Cash Collections");
+    XLSX.writeFile(wb, "Cash_Collections_Report.xlsx");
+  }, [filteredRows, outlets]);
+
+  return (
+    <div className="min-h-screen bg-eggBg px-4 py-6 md:px-8">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-semibold text-gray-900">Cash Payments</h1>
+          <p className="mt-1 text-sm md:text-base text-gray-500">Manage and record daily cash collections across outlets.</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={downloadExcel} className="inline-flex items-center rounded-full bg-[#ff7518] px-4 py-2 text-sm font-medium text-white shadow-sm hover:opacity-90">
+            Export Report
+          </button>
+        </div>
+      </div>
+
+      {/* Only show entry form for admins/data agents */}
+      
+
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => setRangeType("thisMonth")} className={`rounded-full px-4 py-2 text-xs md:text-sm font-medium border ${rangeType === "thisMonth" ? "bg-orange-500 text-white border-orange-500" : "bg-eggWhite text-gray-700 border-gray-200 hover:bg-gray-50"}`}>This Month</button>
+              <button onClick={() => setRangeType("lastMonth")} className={`rounded-full px-4 py-2 text-xs md:text-sm font-medium border ${rangeType === "lastMonth" ? "bg-orange-500 text-white border-orange-500" : "bg-eggWhite text-gray-700 border-gray-200 hover:bg-gray-50"}`}>Last Month</button>
+              <button onClick={() => setRangeType("thisWeek")} className={`rounded-full px-4 py-2 text-xs md:text-sm font-medium border ${rangeType === "thisWeek" ? "bg-orange-500 text-white border-orange-500" : "bg-eggWhite text-gray-700 border-gray-200 hover:bg-gray-50"}`}>This Week</button>
+              <button onClick={() => setRangeType("lastWeek")} className={`rounded-full px-4 py-2 text-xs md:text-sm font-medium border ${rangeType === "lastWeek" ? "bg-orange-500 text-white border-orange-500" : "bg-eggWhite text-gray-700 border-gray-200 hover:bg-gray-50"}`}>Last Week</button>
+              <button onClick={() => setRangeType("custom")} className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs md:text-sm font-medium border ${rangeType === "custom" ? "bg-orange-500 text-white border-orange-500" : "bg-eggWhite text-gray-700 border-gray-200 hover:bg-gray-50"}`}>
+                <span>Custom Range</span>
+                <CalendarIcon className="h-4 w-4" />
+              </button>
+            </div>
+
+        {rangeType === "custom" && (
+          <div className="flex flex-wrap gap-3">
+            <div className="flex items-center gap-2">
+              <label className="text-xs md:text-sm font-medium text-gray-700">Date From</label>
+              <div className="relative z-30" ref={customFromRef}>
+                <button type="button" onClick={() => { setIsCustomFromOpen((o) => !o); setIsCustomToOpen(false); }} className="flex min-w-[140px] sm:min-w-[150px] items-center justify-between rounded-xl border border-gray-200 bg-eggWhite px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-400 md:text-sm">
+                  <span>{customFrom ? formatDateDMY(customFrom) : "dd-mm-yyyy"}</span>
+                  <CalendarIcon className="h-4 w-4 text-gray-500" />
+                </button>
+                {isCustomFromOpen && (
+                  <div className="absolute left-0 top-full z-50 mt-2">
+                    <CashCalendar rows={[]} selectedDate={customFrom} onSelectDate={(iso) => { setCustomFrom(iso); setIsCustomFromOpen(false); }} showDots={false} />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="text-xs md:text-sm font-medium text-gray-700">Date To</label>
+              <div className="relative z-30" ref={customToRef}>
+                <button type="button" onClick={() => { setIsCustomToOpen((o) => !o); setIsCustomFromOpen(false); }} className="flex min-w-[140px] sm:min-w-[150px] items-center justify-between rounded-xl border border-gray-200 bg-eggWhite px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-400 md:text-sm">
+                  <span>{customTo ? formatDateDMY(customTo) : "dd-mm-yyyy"}</span>
+                  <CalendarIcon className="h-4 w-4 text-gray-500" />
+                </button>
+                {isCustomToOpen && (
+                  <div className="absolute right-0 top-full z-50 mt-2">
+                    <CashCalendar rows={[]} selectedDate={customTo} onSelectDate={(iso) => { setCustomTo(iso); setIsCustomToOpen(false); }} showDots={false} />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <DailyTable rows={filteredRows} outlets={displayedOutlets} allOutlets={outlets} showRupee={true} />
+
+
+    </div>
+  );
+}
