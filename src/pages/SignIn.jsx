@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 
 import logo from "../assets/Logo.png";
 import egg from "../assets/egg.png";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
 
 const API_URL = import.meta.env.VITE_API_URL;
 const API_WARMUP_TIMEOUT_MS = 4000;
@@ -33,6 +35,7 @@ export default function SignIn() {
   const [role, setRole] = useState("admin");
   const [zone, setZone] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const warmupPromiseRef = useRef(null);
 
   const navigate = useNavigate();
@@ -163,13 +166,22 @@ export default function SignIn() {
             onChange={(e) => setUsername(e.target.value)}
             className="w-full p-3 rounded-xl bg-eggInput"
           />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full p-3 rounded-xl bg-eggInput"
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full p-3 rounded-xl bg-eggInput pr-12 focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 cursor-pointer"
+            >
+              <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} />
+            </button>
+          </div>
           <select
             value={role}
             onChange={(e) => {
